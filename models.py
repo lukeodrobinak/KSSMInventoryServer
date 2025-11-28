@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
+# from datetime import datetime
 
 class ItemCreate(BaseModel):
     name: str = Field(..., description="Name of the item")
