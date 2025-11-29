@@ -2,6 +2,10 @@ import sqlite3
 from datetime import datetime
 from typing import Optional, List, Dict
 import json
+from passlib.context import CryptContext
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class InventoryDatabase:
     def __init__(self, db_path: str = "inventory.db"):
@@ -17,7 +21,7 @@ class InventoryDatabase:
         """Initialize the database with required tables"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         # Create items table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS items (
@@ -37,7 +41,7 @@ class InventoryDatabase:
                 last_modified_date TEXT NOT NULL
             )
         """)
-        
+
         # Create check in/out history table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS checkout_history (
@@ -50,9 +54,76 @@ class InventoryDatabase:
                 FOREIGN KEY (item_id) REFERENCES items(id)
             )
         """)
-        
+
+        # Create users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_date TEXT NOT NULL,
+                last_login TEXT
+            )
+        """)
+
+        # Create item_requests table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS item_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                requester_id INTEGER NOT NULL,
+                request_type TEXT NOT NULL,
+                item_name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                item_id INTEGER,
+                status TEXT DEFAULT 'pending',
+                denial_reason TEXT,
+                created_date TEXT NOT NULL,
+                reviewed_date TEXT,
+                reviewed_by_id INTEGER,
+                FOREIGN KEY (requester_id) REFERENCES users(id),
+                FOREIGN KEY (reviewed_by_id) REFERENCES users(id),
+                FOREIGN KEY (item_id) REFERENCES items(id)
+            )
+        """)
+
         conn.commit()
+
+        # Create default quartermaster account if no users exist
+        cursor.execute("SELECT COUNT(*) FROM users")
+        user_count = cursor.fetchone()[0]
+
+        if user_count == 0:
+            self._create_default_quartermaster(conn)
+
         conn.close()
+
+    def _create_default_quartermaster(self, conn):
+        """Create default quartermaster account"""
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+
+        # Default credentials: admin@kssm.com / ChangeMe123!
+        default_email = "admin@kssm.com"
+        default_password = "ChangeMe123!"
+        password_hash = pwd_context.hash(default_password)
+
+        cursor.execute("""
+            INSERT INTO users (email, password_hash, full_name, role, created_date)
+            VALUES (?, ?, ?, ?, ?)
+        """, (default_email, password_hash, "Default Quartermaster", "quartermaster", now))
+
+        conn.commit()
+        print(f"\n{'='*60}")
+        print("Default Quartermaster Account Created")
+        print(f"{'='*60}")
+        print(f"Email: {default_email}")
+        print(f"Password: {default_password}")
+        print(f"{'='*60}")
+        print("IMPORTANT: Please change these credentials after first login!")
+        print(f"{'='*60}\n")
     
     def add_item(self, item_data: Dict) -> int:
         """Add a new item to the inventory"""
@@ -257,20 +328,300 @@ class InventoryDatabase:
         """Search items by name, description, or barcode"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         search_query = f"%{query}%"
-        
+
         cursor.execute("""
             SELECT * FROM items
             WHERE name LIKE ? OR description LIKE ? OR barcode LIKE ?
             ORDER BY name
         """, (search_query, search_query, search_query))
-        
+
         rows = cursor.fetchall()
-        
+
         items = []
         for row in rows:
             items.append(dict(row))
-        
+
         conn.close()
         return items
+
+    # MARK: - User Management Methods
+
+    def create_user(self, email: str, password: str, full_name: str, role: str) -> int:
+        """Create a new user"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        now = datetime.now().isoformat()
+        password_hash = pwd_context.hash(password)
+
+        cursor.execute("""
+            INSERT INTO users (email, password_hash, full_name, role, created_date)
+            VALUES (?, ?, ?, ?, ?)
+        """, (email, password_hash, full_name, role, now))
+
+        user_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return user_id
+
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+        row = cursor.fetchone()
+
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def get_user_by_id(self, user_id: int) -> Optional[Dict]:
+        """Get user by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def get_all_users(self) -> List[Dict]:
+        """Get all users"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM users ORDER BY created_date DESC")
+        rows = cursor.fetchall()
+
+        users = []
+        for row in rows:
+            users.append(dict(row))
+
+        conn.close()
+        return users
+
+    def update_user(self, user_id: int, user_data: Dict) -> bool:
+        """Update user information"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Build update query dynamically based on provided fields
+        update_fields = []
+        values = []
+
+        if 'email' in user_data and user_data['email'] is not None:
+            update_fields.append("email = ?")
+            values.append(user_data['email'])
+
+        if 'full_name' in user_data and user_data['full_name'] is not None:
+            update_fields.append("full_name = ?")
+            values.append(user_data['full_name'])
+
+        if 'role' in user_data and user_data['role'] is not None:
+            update_fields.append("role = ?")
+            values.append(user_data['role'])
+
+        if 'password' in user_data and user_data['password'] is not None:
+            update_fields.append("password_hash = ?")
+            values.append(pwd_context.hash(user_data['password']))
+
+        if 'is_active' in user_data:
+            update_fields.append("is_active = ?")
+            values.append(user_data['is_active'])
+
+        if not update_fields:
+            conn.close()
+            return False
+
+        values.append(user_id)
+        query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = ?"
+
+        cursor.execute(query, values)
+        success = cursor.rowcount > 0
+
+        conn.commit()
+        conn.close()
+
+        return success
+
+    def update_last_login(self, user_id: int) -> bool:
+        """Update user's last login timestamp"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        now = datetime.now().isoformat()
+
+        cursor.execute("UPDATE users SET last_login = ? WHERE id = ?", (now, user_id))
+        success = cursor.rowcount > 0
+
+        conn.commit()
+        conn.close()
+
+        return success
+
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        """Verify a password against its hash"""
+        return pwd_context.verify(plain_password, hashed_password)
+
+    def delete_user(self, user_id: int) -> bool:
+        """Delete a user (soft delete by setting is_active to 0)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+        success = cursor.rowcount > 0
+
+        conn.commit()
+        conn.close()
+
+        return success
+
+    # MARK: - Item Request Methods
+
+    def create_item_request(self, requester_id: int, request_type: str, item_name: str, description: str, item_id: Optional[int] = None) -> int:
+        """Create a new item request"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        now = datetime.now().isoformat()
+
+        cursor.execute("""
+            INSERT INTO item_requests (requester_id, request_type, item_name, description, item_id, created_date)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (requester_id, request_type, item_name, description, item_id, now))
+
+        request_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return request_id
+
+    def get_all_requests(self) -> List[Dict]:
+        """Get all item requests with user information"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                ir.*,
+                u1.full_name as requester_name,
+                u2.full_name as reviewed_by_name
+            FROM item_requests ir
+            LEFT JOIN users u1 ON ir.requester_id = u1.id
+            LEFT JOIN users u2 ON ir.reviewed_by_id = u2.id
+            ORDER BY ir.created_date DESC
+        """)
+
+        rows = cursor.fetchall()
+
+        requests = []
+        for row in rows:
+            requests.append(dict(row))
+
+        conn.close()
+        return requests
+
+    def get_requests_by_user(self, user_id: int) -> List[Dict]:
+        """Get all requests created by a specific user"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                ir.*,
+                u1.full_name as requester_name,
+                u2.full_name as reviewed_by_name
+            FROM item_requests ir
+            LEFT JOIN users u1 ON ir.requester_id = u1.id
+            LEFT JOIN users u2 ON ir.reviewed_by_id = u2.id
+            WHERE ir.requester_id = ?
+            ORDER BY ir.created_date DESC
+        """, (user_id,))
+
+        rows = cursor.fetchall()
+
+        requests = []
+        for row in rows:
+            requests.append(dict(row))
+
+        conn.close()
+        return requests
+
+    def get_pending_requests(self) -> List[Dict]:
+        """Get all pending requests"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                ir.*,
+                u1.full_name as requester_name,
+                u2.full_name as reviewed_by_name
+            FROM item_requests ir
+            LEFT JOIN users u1 ON ir.requester_id = u1.id
+            LEFT JOIN users u2 ON ir.reviewed_by_id = u2.id
+            WHERE ir.status = 'pending'
+            ORDER BY ir.created_date DESC
+        """)
+
+        rows = cursor.fetchall()
+
+        requests = []
+        for row in rows:
+            requests.append(dict(row))
+
+        conn.close()
+        return requests
+
+    def update_request_status(self, request_id: int, status: str, reviewed_by_id: int, denial_reason: Optional[str] = None) -> bool:
+        """Update the status of an item request"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        now = datetime.now().isoformat()
+
+        cursor.execute("""
+            UPDATE item_requests
+            SET status = ?, reviewed_by_id = ?, reviewed_date = ?, denial_reason = ?
+            WHERE id = ?
+        """, (status, reviewed_by_id, now, denial_reason, request_id))
+
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+
+        return success
+
+    def get_request_by_id(self, request_id: int) -> Optional[Dict]:
+        """Get a specific request by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                ir.*,
+                u1.full_name as requester_name,
+                u2.full_name as reviewed_by_name
+            FROM item_requests ir
+            LEFT JOIN users u1 ON ir.requester_id = u1.id
+            LEFT JOIN users u2 ON ir.reviewed_by_id = u2.id
+            WHERE ir.id = ?
+        """, (request_id,))
+
+        row = cursor.fetchone()
+
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
