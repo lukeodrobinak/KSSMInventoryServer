@@ -106,7 +106,7 @@ def user_dict_to_response(user: dict) -> UserResponse:
     """Convert user dict to UserResponse model"""
     return UserResponse(
         id=user['id'],
-        email=user['email'],
+        username=user['username'],
         full_name=user['full_name'],
         role=user['role'],
         created_date=user['created_date'],
