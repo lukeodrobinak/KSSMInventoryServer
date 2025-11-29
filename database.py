@@ -59,7 +59,7 @@ class InventoryDatabase:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
+                username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 full_name TEXT NOT NULL,
                 role TEXT NOT NULL,
@@ -105,21 +105,21 @@ class InventoryDatabase:
         cursor = conn.cursor()
         now = datetime.now().isoformat()
 
-        # Default credentials: admin@kssm.com / ChangeMe123!
-        default_email = "admin@kssm.com"
+        # Default credentials: admin / ChangeMe123!
+        default_username = "admin"
         default_password = "ChangeMe123!"
         password_hash = pwd_context.hash(default_password)
 
         cursor.execute("""
-            INSERT INTO users (email, password_hash, full_name, role, created_date)
+            INSERT INTO users (username, password_hash, full_name, role, created_date)
             VALUES (?, ?, ?, ?, ?)
-        """, (default_email, password_hash, "Default Quartermaster", "quartermaster", now))
+        """, (default_username, password_hash, "Default Quartermaster", "quartermaster", now))
 
         conn.commit()
         print(f"\n{'='*60}")
         print("Default Quartermaster Account Created")
         print(f"{'='*60}")
-        print(f"Email: {default_email}")
+        print(f"Username: {default_username}")
         print(f"Password: {default_password}")
         print(f"{'='*60}")
         print("IMPORTANT: Please change these credentials after first login!")
@@ -348,7 +348,7 @@ class InventoryDatabase:
 
     # MARK: - User Management Methods
 
-    def create_user(self, email: str, password: str, full_name: str, role: str) -> int:
+    def create_user(self, username: str, password: str, full_name: str, role: str) -> int:
         """Create a new user"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -357,9 +357,9 @@ class InventoryDatabase:
         password_hash = pwd_context.hash(password)
 
         cursor.execute("""
-            INSERT INTO users (email, password_hash, full_name, role, created_date)
+            INSERT INTO users (username, password_hash, full_name, role, created_date)
             VALUES (?, ?, ?, ?, ?)
-        """, (email, password_hash, full_name, role, now))
+        """, (username, password_hash, full_name, role, now))
 
         user_id = cursor.lastrowid
         conn.commit()
@@ -367,12 +367,12 @@ class InventoryDatabase:
 
         return user_id
 
-    def get_user_by_email(self, email: str) -> Optional[Dict]:
-        """Get user by email"""
+    def get_user_by_username(self, username: str) -> Optional[Dict]:
+        """Get user by username"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         row = cursor.fetchone()
 
         conn.close()
@@ -419,9 +419,9 @@ class InventoryDatabase:
         update_fields = []
         values = []
 
-        if 'email' in user_data and user_data['email'] is not None:
-            update_fields.append("email = ?")
-            values.append(user_data['email'])
+        if 'username' in user_data and user_data['username'] is not None:
+            update_fields.append("username = ?")
+            values.append(user_data['username'])
 
         if 'full_name' in user_data and user_data['full_name'] is not None:
             update_fields.append("full_name = ?")

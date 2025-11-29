@@ -71,20 +71,20 @@ async def root():
 @app.post("/api/auth/login", response_model=LoginResponse)
 async def login(login_request: LoginRequest):
     """Authenticate user and return access token"""
-    # Get user by email
-    user = db.get_user_by_email(login_request.email)
+    # Get user by username
+    user = db.get_user_by_username(login_request.username)
 
     if not user:
         raise HTTPException(
             status_code=401,
-            detail="Incorrect email or password"
+            detail="Incorrect username or password"
         )
 
     # Verify password
     if not db.verify_password(login_request.password, user['password_hash']):
         raise HTTPException(
             status_code=401,
-            detail="Incorrect email or password"
+            detail="Incorrect username or password"
         )
 
     # Check if user is active
@@ -298,14 +298,14 @@ async def create_user(
     current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Create a new user (Quartermaster only)"""
-    # Check if email already exists
-    existing_user = db.get_user_by_email(user.email)
+    # Check if username already exists
+    existing_user = db.get_user_by_username(user.username)
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Username already registered")
 
     try:
         user_id = db.create_user(
-            email=user.email,
+            username=user.username,
             password=user.password,
             full_name=user.full_name,
             role=user.role.value
@@ -349,12 +349,12 @@ async def update_user(
 
     # Build update data
     update_data = {}
-    if user_update.email is not None:
-        # Check if new email is already taken by another user
-        email_check = db.get_user_by_email(user_update.email)
-        if email_check and email_check['id'] != user_id:
-            raise HTTPException(status_code=400, detail="Email already in use")
-        update_data['email'] = user_update.email
+    if user_update.username is not None:
+        # Check if new username is already taken by another user
+        username_check = db.get_user_by_username(user_update.username)
+        if username_check and username_check['id'] != user_id:
+            raise HTTPException(status_code=400, detail="Username already in use")
+        update_data['username'] = user_update.username
 
     if user_update.full_name is not None:
         update_data['full_name'] = user_update.full_name

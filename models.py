@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
 
@@ -66,20 +66,20 @@ class UserRole(str, Enum):
     QUARTERMASTER = "quartermaster"
 
 class UserCreate(BaseModel):
-    email: EmailStr = Field(..., description="User email address")
+    username: str = Field(..., min_length=3, max_length=50, description="Username")
     password: str = Field(..., min_length=8, description="User password")
     full_name: str = Field(..., description="User's full name")
     role: UserRole = Field(UserRole.MEMBER, description="User role")
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
     full_name: Optional[str] = None
     role: Optional[UserRole] = None
     password: Optional[str] = Field(None, min_length=8)
 
 class UserResponse(BaseModel):
     id: int
-    email: str
+    username: str
     full_name: str
     role: str
     created_date: str
@@ -87,7 +87,7 @@ class UserResponse(BaseModel):
     is_active: int
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    username: str
     password: str
 
 class LoginResponse(BaseModel):
