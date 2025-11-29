@@ -1,7 +1,10 @@
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Query, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from typing import List, Optional
 import uvicorn
+import logging
 
 from database import InventoryDatabase
 from models import (
@@ -14,6 +17,10 @@ from auth import (
     create_access_token, get_current_user, get_current_active_user,
     require_role, user_dict_to_response
 )
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -33,6 +40,22 @@ app.add_middleware(
 
 # Initialize database
 db = InventoryDatabase()
+
+# Custom validation error handler for better debugging
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    body = await request.body()
+    logger.error(f"Validation error on {request.url.path}")
+    logger.error(f"Request body: {body.decode()}")
+    logger.error(f"Validation errors: {errors}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": errors,
+            "body": body.decode()
+        }
+    )
 
 @app.get("/")
 async def root():
