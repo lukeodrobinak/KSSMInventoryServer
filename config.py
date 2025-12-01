@@ -3,8 +3,8 @@ Configuration settings for the Inventory Management System Server
 """
 
 # Server Configuration
-SERVER_HOST = "0.0.0.0"  # Listen on all network interfaces
-SERVER_PORT = 8000       # Port number for the server
+SERVER_HOST = "192.168.1.74"  # Listen on all network interfaces
+SERVER_PORT = 8080       # Port number for the server
 
 # Database Configuration
 DATABASE_PATH = "inventory.db"  # Path to SQLite database file

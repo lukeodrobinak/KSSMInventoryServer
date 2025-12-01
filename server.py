@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from typing import List, Optional
+from typing import List
 import uvicorn
 import logging
 
@@ -14,7 +14,7 @@ from models import (
     PasswordResetRequest, ItemRequestCreate, ItemRequestUpdate, ItemRequestResponse
 )
 from auth import (
-    create_access_token, get_current_user, get_current_active_user,
+    create_access_token, get_current_user,
     require_role, user_dict_to_response
 )
 
@@ -57,6 +57,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
+
 @app.get("/")
 async def root():
     """Root endpoint - API health check"""
@@ -65,6 +66,7 @@ async def root():
         "version": "1.0.0",
         "status": "running"
     }
+
 
 # MARK: - Authentication Endpoints
 
@@ -108,10 +110,12 @@ async def login(login_request: LoginRequest):
         user=user_response
     )
 
+
 @app.get("/api/auth/me", response_model=UserResponse)
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current authenticated user information"""
     return user_dict_to_response(current_user)
+
 
 @app.get("/api/items", response_model=List[ItemResponse])
 async def get_all_items(current_user: dict = Depends(get_current_user)):
@@ -122,6 +126,7 @@ async def get_all_items(current_user: dict = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/items/{item_id}", response_model=ItemResponse)
 async def get_item(item_id: int, current_user: dict = Depends(get_current_user)):
     """Get a specific item by ID (All authenticated users)"""
@@ -130,24 +135,26 @@ async def get_item(item_id: int, current_user: dict = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Item not found")
     return item
 
+
 @app.post("/api/items", response_model=ItemResponse)
 async def create_item(
-    item: ItemCreate,
-    current_user: dict = Depends(require_role(["quartermaster"]))
+        item: ItemCreate,
+        current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Create a new inventory item (Quartermaster only - Admins must use requests)"""
     try:
-        item_id = db.add_item(item.dict())
+        item_id = db.add_item(item.model_dump())
         new_item = db.get_item(item_id)
         return new_item
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.put("/api/items/{item_id}", response_model=ItemResponse)
 async def update_item(
-    item_id: int,
-    item: ItemUpdate,
-    current_user: dict = Depends(require_role(["admin", "quartermaster"]))
+        item_id: int,
+        item: ItemUpdate,
+        current_user: dict = Depends(require_role(["admin", "quartermaster"]))
 ):
     """Update an existing item (Admin and Quartermaster only)"""
     # Check if item exists
@@ -156,7 +163,7 @@ async def update_item(
         raise HTTPException(status_code=404, detail="Item not found")
 
     # Only update fields that are provided
-    update_data = {k: v for k, v in item.dict().items() if v is not None}
+    update_data = {k: v for k, v in item.model_dump().items() if v is not None}
 
     # If no fields to update, return existing item
     if not update_data:
@@ -177,10 +184,11 @@ async def update_item(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.delete("/api/items/{item_id}", response_model=MessageResponse)
 async def delete_item(
-    item_id: int,
-    current_user: dict = Depends(require_role(["quartermaster"]))
+        item_id: int,
+        current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Delete an item from the inventory (Quartermaster only - Admins must use requests)"""
     success = db.delete_item(item_id)
@@ -189,11 +197,12 @@ async def delete_item(
 
     return MessageResponse(message="Item deleted successfully", success=True)
 
+
 @app.post("/api/items/{item_id}/checkout", response_model=MessageResponse)
 async def checkout_item(
-    item_id: int,
-    checkout: CheckoutRequest,
-    current_user: dict = Depends(get_current_user)
+        item_id: int,
+        checkout: CheckoutRequest,
+        current_user: dict = Depends(get_current_user)
 ):
     """Check out an item to a person (All authenticated users)"""
     # Check if item exists
@@ -217,11 +226,12 @@ async def checkout_item(
         success=True
     )
 
+
 @app.post("/api/items/{item_id}/checkin", response_model=MessageResponse)
 async def checkin_item(
-    item_id: int,
-    checkin: CheckinRequest,
-    current_user: dict = Depends(get_current_user)
+        item_id: int,
+        checkin: CheckinRequest,
+        current_user: dict = Depends(get_current_user)
 ):
     """Check in an item (All authenticated users)"""
     # Check if item exists
@@ -242,6 +252,7 @@ async def checkin_item(
         success=True
     )
 
+
 @app.get("/api/items/{item_id}/history", response_model=List[HistoryEntry])
 async def get_item_history(item_id: int, current_user: dict = Depends(get_current_user)):
     """Get the checkout/checkin history for an item (All authenticated users)"""
@@ -253,10 +264,11 @@ async def get_item_history(item_id: int, current_user: dict = Depends(get_curren
     history = db.get_item_history(item_id)
     return history
 
+
 @app.get("/api/items/search/", response_model=List[ItemResponse])
 async def search_items(
-    q: str = Query(..., min_length=1, description="Search query"),
-    current_user: dict = Depends(get_current_user)
+        q: str = Query(..., min_length=1, description="Search query"),
+        current_user: dict = Depends(get_current_user)
 ):
     """Search for items by name, description, or barcode (All authenticated users)"""
     try:
@@ -264,6 +276,7 @@ async def search_items(
         return items
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/stats")
 async def get_stats(current_user: dict = Depends(require_role(["admin", "quartermaster"]))):
@@ -290,12 +303,13 @@ async def get_stats(current_user: dict = Depends(require_role(["admin", "quarter
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # MARK: - User Management Endpoints
 
 @app.post("/api/users", response_model=UserResponse)
 async def create_user(
-    user: UserCreate,
-    current_user: dict = Depends(require_role(["quartermaster"]))
+        user: UserCreate,
+        current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Create a new user (Quartermaster only)"""
     # Check if username already exists
@@ -315,6 +329,7 @@ async def create_user(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/api/users", response_model=List[UserResponse])
 async def get_all_users(current_user: dict = Depends(require_role(["quartermaster"]))):
     """Get all users (Quartermaster only)"""
@@ -324,10 +339,11 @@ async def get_all_users(current_user: dict = Depends(require_role(["quartermaste
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/users/{user_id}", response_model=UserResponse)
 async def get_user(
-    user_id: int,
-    current_user: dict = Depends(require_role(["quartermaster"]))
+        user_id: int,
+        current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Get a specific user by ID (Quartermaster only)"""
     user = db.get_user_by_id(user_id)
@@ -335,11 +351,12 @@ async def get_user(
         raise HTTPException(status_code=404, detail="User not found")
     return user_dict_to_response(user)
 
+
 @app.put("/api/users/{user_id}", response_model=UserResponse)
 async def update_user(
-    user_id: int,
-    user_update: UserUpdate,
-    current_user: dict = Depends(require_role(["quartermaster"]))
+        user_id: int,
+        user_update: UserUpdate,
+        current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Update a user (Quartermaster only)"""
     # Check if user exists
@@ -375,10 +392,11 @@ async def update_user(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.delete("/api/users/{user_id}", response_model=MessageResponse)
 async def delete_user(
-    user_id: int,
-    current_user: dict = Depends(require_role(["quartermaster"]))
+        user_id: int,
+        current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Deactivate a user (Quartermaster only)"""
     # Prevent deleting yourself
@@ -391,10 +409,11 @@ async def delete_user(
 
     return MessageResponse(message="User deactivated successfully", success=True)
 
+
 @app.post("/api/users/reset-password", response_model=MessageResponse)
 async def reset_password(
-    reset_request: PasswordResetRequest,
-    current_user: dict = Depends(require_role(["quartermaster"]))
+        reset_request: PasswordResetRequest,
+        current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Reset a user's password (Quartermaster only - admin-assisted password recovery)"""
     user = db.get_user_by_id(reset_request.user_id)
@@ -410,12 +429,13 @@ async def reset_password(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 # MARK: - Item Request Endpoints
 
 @app.post("/api/requests", response_model=ItemRequestResponse)
 async def create_request(
-    request: ItemRequestCreate,
-    current_user: dict = Depends(require_role(["admin"]))
+        request: ItemRequestCreate,
+        current_user: dict = Depends(require_role(["admin"]))
 ):
     """Create a new item request (Admin only)"""
     try:
@@ -442,6 +462,7 @@ async def create_request(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.get("/api/requests", response_model=List[ItemRequestResponse])
 async def get_all_requests(current_user: dict = Depends(require_role(["quartermaster"]))):
     """Get all item requests (Quartermaster only)"""
@@ -450,6 +471,7 @@ async def get_all_requests(current_user: dict = Depends(require_role(["quarterma
         return requests
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/requests/pending", response_model=List[ItemRequestResponse])
 async def get_pending_requests(current_user: dict = Depends(require_role(["quartermaster"]))):
@@ -460,6 +482,7 @@ async def get_pending_requests(current_user: dict = Depends(require_role(["quart
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/requests/my", response_model=List[ItemRequestResponse])
 async def get_my_requests(current_user: dict = Depends(require_role(["admin"]))):
     """Get all requests created by the current user (Admin only)"""
@@ -469,11 +492,12 @@ async def get_my_requests(current_user: dict = Depends(require_role(["admin"])))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.put("/api/requests/{request_id}", response_model=ItemRequestResponse)
 async def update_request_status(
-    request_id: int,
-    status_update: ItemRequestUpdate,
-    current_user: dict = Depends(require_role(["quartermaster"]))
+        request_id: int,
+        status_update: ItemRequestUpdate,
+        current_user: dict = Depends(require_role(["quartermaster"]))
 ):
     """Approve or deny an item request (Quartermaster only)"""
     # Get the request
@@ -501,7 +525,7 @@ async def update_request_status(
         if not success:
             raise HTTPException(status_code=400, detail="Failed to update request")
 
-        # If approved and it's an add request, create the item
+        # If approved, and it's an add request, create the item
         if status_update.status.value == "approved" and request['request_type'] == "add_item":
             # Create item with basic info from request
             item_data = {
@@ -522,6 +546,7 @@ async def update_request_status(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 if __name__ == "__main__":
     print("=" * 60)
     print("Inventory Management System Server")
@@ -532,5 +557,5 @@ if __name__ == "__main__":
     print("=" * 60)
     print("\nPress CTRL+C to stop the server")
     print()
-    
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+
+    uvicorn.run(app, host="192.168.1.74", port=8080, log_level="info")

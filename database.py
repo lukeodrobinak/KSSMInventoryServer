@@ -1,11 +1,15 @@
 import sqlite3
 from datetime import datetime
 from typing import Optional, List, Dict
-import json
 from passlib.context import CryptContext
+import hashlib
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _prepare_password(password: str) -> bytes:
+    """Pre-hash password with SHA256 to ensure it's under bcrypt's 72-byte limit"""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest().encode('utf-8')
 
 class InventoryDatabase:
     def __init__(self, db_path: str = "inventory.db"):
@@ -108,7 +112,7 @@ class InventoryDatabase:
         # Default credentials: admin / ChangeMe123!
         default_username = "admin"
         default_password = "ChangeMe123!"
-        password_hash = pwd_context.hash(default_password)
+        password_hash = pwd_context.hash(_prepare_password(default_password))
 
         cursor.execute("""
             INSERT INTO users (username, password_hash, full_name, role, created_date)
@@ -354,7 +358,7 @@ class InventoryDatabase:
         cursor = conn.cursor()
 
         now = datetime.now().isoformat()
-        password_hash = pwd_context.hash(password)
+        password_hash = pwd_context.hash(_prepare_password(password))
 
         cursor.execute("""
             INSERT INTO users (username, password_hash, full_name, role, created_date)
@@ -433,7 +437,7 @@ class InventoryDatabase:
 
         if 'password' in user_data and user_data['password'] is not None:
             update_fields.append("password_hash = ?")
-            values.append(pwd_context.hash(user_data['password']))
+            values.append(pwd_context.hash(_prepare_password(user_data['password'])))
 
         if 'is_active' in user_data:
             update_fields.append("is_active = ?")
@@ -471,7 +475,7 @@ class InventoryDatabase:
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash"""
-        return pwd_context.verify(plain_password, hashed_password)
+        return pwd_context.verify(_prepare_password(plain_password), hashed_password)
 
     def delete_user(self, user_id: int) -> bool:
         """Delete a user (soft delete by setting is_active to 0)"""
