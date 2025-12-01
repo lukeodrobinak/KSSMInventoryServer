@@ -15,7 +15,9 @@ from models import (
     ItemCreate, ItemUpdate, ItemResponse, CheckoutRequest,
     CheckinRequest, HistoryEntry, MessageResponse,
     UserCreate, UserUpdate, UserResponse, LoginRequest, LoginResponse,
-    PasswordResetRequest, ItemRequestCreate, ItemRequestUpdate, ItemRequestResponse
+    PasswordResetRequest, ItemRequestCreate, ItemRequestUpdate, ItemRequestResponse,
+    CategoryCreate, CategoryUpdate, CategoryResponse,
+    LocationCreate, LocationUpdate, LocationResponse
 )
 from auth import (
     create_access_token, get_current_user,
@@ -127,8 +129,6 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current authenticated user information"""
     return user_dict_to_response(current_user)
 
-<<<<<<< HEAD
-=======
 # MARK: - Image Upload Endpoints
 
 @app.post("/api/upload/image")
@@ -190,7 +190,6 @@ async def delete_image(
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
 # MARK: - Item Endpoints
->>>>>>> a4df500 (Add image upload and serving endpoints)
 
 @app.get("/api/items", response_model=List[ItemResponse])
 async def get_all_items(current_user: dict = Depends(get_current_user)):
@@ -620,6 +619,136 @@ async def update_request_status(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# MARK: - Category Endpoints
+
+@app.get("/api/categories", response_model=List[CategoryResponse])
+async def get_all_categories(current_user: dict = Depends(get_current_user)):
+    """Get all categories (All authenticated users)"""
+    try:
+        categories = db.get_all_categories()
+        return categories
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/categories", response_model=CategoryResponse)
+async def create_category(
+        category: CategoryCreate,
+        current_user: dict = Depends(require_role(["quartermaster"]))
+):
+    """Create a new category (Quartermaster only)"""
+    try:
+        category_id = db.create_category(category.name, current_user['id'])
+        new_category = db.get_category(category_id)
+        return new_category
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e):
+            raise HTTPException(status_code=400, detail="Category name already exists")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/categories/{category_id}", response_model=CategoryResponse)
+async def update_category(
+        category_id: int,
+        category: CategoryUpdate,
+        current_user: dict = Depends(require_role(["quartermaster"]))
+):
+    """Update a category (Quartermaster only)"""
+    existing = db.get_category(category_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    try:
+        success = db.update_category(category_id, category.name)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to update category")
+
+        updated_category = db.get_category(category_id)
+        return updated_category
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e):
+            raise HTTPException(status_code=400, detail="Category name already exists")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/categories/{category_id}", response_model=MessageResponse)
+async def delete_category(
+        category_id: int,
+        current_user: dict = Depends(require_role(["quartermaster"]))
+):
+    """Delete a category (Quartermaster only)"""
+    success = db.delete_category(category_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    return MessageResponse(message="Category deleted successfully", success=True)
+
+
+# MARK: - Location Endpoints
+
+@app.get("/api/locations", response_model=List[LocationResponse])
+async def get_all_locations(current_user: dict = Depends(get_current_user)):
+    """Get all locations (All authenticated users)"""
+    try:
+        locations = db.get_all_locations()
+        return locations
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/locations", response_model=LocationResponse)
+async def create_location(
+        location: LocationCreate,
+        current_user: dict = Depends(require_role(["quartermaster"]))
+):
+    """Create a new location (Quartermaster only)"""
+    try:
+        location_id = db.create_location(location.name, current_user['id'])
+        new_location = db.get_location(location_id)
+        return new_location
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e):
+            raise HTTPException(status_code=400, detail="Location name already exists")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/locations/{location_id}", response_model=LocationResponse)
+async def update_location(
+        location_id: int,
+        location: LocationUpdate,
+        current_user: dict = Depends(require_role(["quartermaster"]))
+):
+    """Update a location (Quartermaster only)"""
+    existing = db.get_location(location_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    try:
+        success = db.update_location(location_id, location.name)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to update location")
+
+        updated_location = db.get_location(location_id)
+        return updated_location
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e):
+            raise HTTPException(status_code=400, detail="Location name already exists")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/locations/{location_id}", response_model=MessageResponse)
+async def delete_location(
+        location_id: int,
+        current_user: dict = Depends(require_role(["quartermaster"]))
+):
+    """Delete a location (Quartermaster only)"""
+    success = db.delete_location(location_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    return MessageResponse(message="Location deleted successfully", success=True)
 
 
 if __name__ == "__main__":

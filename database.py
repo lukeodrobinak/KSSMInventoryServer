@@ -93,6 +93,28 @@ class InventoryDatabase:
             )
         """)
 
+        # Create categories table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_by_id INTEGER NOT NULL,
+                created_date TEXT NOT NULL,
+                FOREIGN KEY (created_by_id) REFERENCES users(id)
+            )
+        """)
+
+        # Create locations table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS locations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_by_id INTEGER NOT NULL,
+                created_date TEXT NOT NULL,
+                FOREIGN KEY (created_by_id) REFERENCES users(id)
+            )
+        """)
+
         conn.commit()
 
         # Create default quartermaster account if no users exist
@@ -629,3 +651,173 @@ class InventoryDatabase:
         if row:
             return dict(row)
         return None
+
+    # MARK: - Category Management
+
+    def create_category(self, name: str, created_by_id: int) -> int:
+        """Create a new category"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute("""
+            INSERT INTO categories (name, created_by_id, created_date)
+            VALUES (?, ?, ?)
+        """, (name, created_by_id, now))
+
+        category_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return category_id
+
+    def get_all_categories(self) -> List[Dict]:
+        """Get all categories"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT c.id, c.name, c.created_date, u.full_name as created_by
+            FROM categories c
+            LEFT JOIN users u ON c.created_by_id = u.id
+            ORDER BY c.name ASC
+        """)
+
+        categories = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        return categories
+
+    def get_category(self, category_id: int) -> Optional[Dict]:
+        """Get a specific category by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT c.id, c.name, c.created_date, u.full_name as created_by
+            FROM categories c
+            LEFT JOIN users u ON c.created_by_id = u.id
+            WHERE c.id = ?
+        """, (category_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def update_category(self, category_id: int, name: str) -> bool:
+        """Update a category name"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE categories
+            SET name = ?
+            WHERE id = ?
+        """, (name, category_id))
+
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+
+        return success
+
+    def delete_category(self, category_id: int) -> bool:
+        """Delete a category"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+
+        return success
+
+    # MARK: - Location Management
+
+    def create_location(self, name: str, created_by_id: int) -> int:
+        """Create a new location"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+
+        cursor.execute("""
+            INSERT INTO locations (name, created_by_id, created_date)
+            VALUES (?, ?, ?)
+        """, (name, created_by_id, now))
+
+        location_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return location_id
+
+    def get_all_locations(self) -> List[Dict]:
+        """Get all locations"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT l.id, l.name, l.created_date, u.full_name as created_by
+            FROM locations l
+            LEFT JOIN users u ON l.created_by_id = u.id
+            ORDER BY l.name ASC
+        """)
+
+        locations = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        return locations
+
+    def get_location(self, location_id: int) -> Optional[Dict]:
+        """Get a specific location by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT l.id, l.name, l.created_date, u.full_name as created_by
+            FROM locations l
+            LEFT JOIN users u ON l.created_by_id = u.id
+            WHERE l.id = ?
+        """, (location_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def update_location(self, location_id: int, name: str) -> bool:
+        """Update a location name"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE locations
+            SET name = ?
+            WHERE id = ?
+        """, (name, location_id))
+
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+
+        return success
+
+    def delete_location(self, location_id: int) -> bool:
+        """Delete a location"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM locations WHERE id = ?", (location_id,))
+
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+
+        return success

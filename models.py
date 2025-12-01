@@ -134,3 +134,29 @@ class ItemRequestResponse(BaseModel):
     reviewed_date: Optional[str]
     reviewed_by_id: Optional[int]
     reviewed_by_name: Optional[str]
+
+# MARK: - Category and Location Models
+
+class CategoryCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Category name")
+
+class CategoryUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="New category name")
+
+class CategoryResponse(BaseModel):
+    id: int
+    name: str
+    created_date: str
+    created_by: str
+
+class LocationCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Location name")
+
+class LocationUpdate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="New location name")
+
+class LocationResponse(BaseModel):
+    id: int
+    name: str
+    created_date: str
+    created_by: str
