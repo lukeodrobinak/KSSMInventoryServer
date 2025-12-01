@@ -1,10 +1,14 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, Request
+from fastapi import FastAPI, HTTPException, Query, Depends, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from typing import List
+from fastapi.staticfiles import StaticFiles
+from typing import List, Optional
 import uvicorn
 import logging
+import os
+import uuid
+from pathlib import Path
 
 from database import InventoryDatabase
 from models import (
@@ -40,6 +44,13 @@ app.add_middleware(
 
 # Initialize database
 db = InventoryDatabase()
+
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR = Path("uploads/items")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mount static files for serving uploaded images
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Custom validation error handler for better debugging
 @app.exception_handler(RequestValidationError)
@@ -116,6 +127,70 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current authenticated user information"""
     return user_dict_to_response(current_user)
 
+<<<<<<< HEAD
+=======
+# MARK: - Image Upload Endpoints
+
+@app.post("/api/upload/image")
+async def upload_image(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload an image file and return the URL (All authenticated users)"""
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed types: {', '.join(allowed_types)}"
+        )
+
+    # Validate file size (max 10MB)
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:  # 10MB
+        raise HTTPException(status_code=400, detail="File size exceeds 10MB limit")
+
+    # Generate unique filename
+    file_extension = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = UPLOAD_DIR / unique_filename
+
+    # Save file
+    try:
+        with open(file_path, "wb") as f:
+            f.write(contents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+    # Return the URL path (relative to server)
+    image_url = f"/uploads/items/{unique_filename}"
+    return {"image_url": image_url, "success": True}
+
+@app.delete("/api/upload/image")
+async def delete_image(
+    image_url: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an uploaded image (All authenticated users)"""
+    # Extract filename from URL
+    if not image_url.startswith("/uploads/items/"):
+        raise HTTPException(status_code=400, detail="Invalid image URL")
+
+    filename = image_url.replace("/uploads/items/", "")
+    file_path = UPLOAD_DIR / filename
+
+    # Delete file if it exists
+    try:
+        if file_path.exists():
+            os.remove(file_path)
+            return {"message": "Image deleted successfully", "success": True}
+        else:
+            raise HTTPException(status_code=404, detail="Image not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+# MARK: - Item Endpoints
+>>>>>>> a4df500 (Add image upload and serving endpoints)
 
 @app.get("/api/items", response_model=List[ItemResponse])
 async def get_all_items(current_user: dict = Depends(get_current_user)):
